@@ -8,7 +8,8 @@
 // ui.render (Pane): clickable model and effort, the installed mods with an
 // On/Off switch each, and the external harnesses with the models each one
 // offers and the one Claude last chose for it.
-// turn.step: applies the picked model and effort to the main loop's requests.
+// The picked model goes through the built-in /model, so the session itself
+// changes model. turn.step applies the picked effort to the main loop's requests.
 // tool.call (harness_model): the tool Claude uses to list a harness's models
 // and to record which one it chose. The panel only shows that choice.
 
@@ -48,7 +49,12 @@ const notice = atom({ plugin: 'dawa-tools', key: 'notice' } as const, '')
 type HarnessConfig = {
   id: string
   name: string
-  models: { command: string[]; format: 'lines' | 'json'; path?: string }
+  models: {
+    command: string[]
+    format: 'lines' | 'json'
+    path?: string
+    include?: string
+  }
 }
 
 const messageOf = (error: unknown) =>
@@ -82,8 +88,9 @@ const pick = (value: unknown, path: string): string[] => {
   return level.flat().filter((one): one is string => typeof one === 'string')
 }
 
+// `include` keeps only the models whose name contains the text, ignoring case.
 const listModels = async ($: Engine, config: HarnessConfig) => {
-  const { command, format, path } = config.models
+  const { command, format, path, include } = config.models
   const { exitCode, stdout, stderr } = await run($, command)
 
   if (exitCode !== 0) {
@@ -97,8 +104,11 @@ const listModels = async ($: Engine, config: HarnessConfig) => {
           .split('\n')
           .map(line => line.trim())
           .filter(line => line !== '')
+  const wanted = include?.toLowerCase()
 
-  return [...new Set(models)]
+  return [...new Set(models)].filter(
+    model => wanted === undefined || model.toLowerCase().includes(wanted),
+  )
 }
 
 const chosenModels = async ($: Engine) =>
@@ -180,12 +190,23 @@ const toggleMod = async ($: Engine, mod: ModRow) => {
   await $.command.run({ command: 'reload-plugins' }).catch(() => undefined)
 }
 
+// Runs the built-in /model as if the person typed it, so the session's model changes.
+const applyModel = async ($: Engine, model: string) => {
+  await $.command.run({ command: 'model', args: model }).catch(async error => {
+    await update($, notice, () => `model: ${messageOf(error)}`)
+  })
+}
+
 const choose = async ($: Engine, patch: Partial<Selection>) => {
   await update($, selection, current => ({ ...current, ...patch }))
   await $.store.set('selection', {
     ...(((await $.store.get('selection')) ?? {}) as Selection),
     ...patch,
   })
+
+  if ('model' in patch) {
+    await applyModel($, patch.model ?? 'default')
+  }
 }
 
 const openPane = async ($: Engine) => {
@@ -204,6 +225,9 @@ export const register: Register = on => {
 
     if (saved !== undefined) {
       await update($, selection, () => saved)
+    }
+    if (saved?.model) {
+      await applyModel($, saved.model)
     }
 
     await $.command.register({
@@ -240,21 +264,18 @@ export const register: Register = on => {
 
     return { text: 'Dawa Tools opened.' }
   })
-
   on('turn.step', async function* ($, e, next) {
     if (e.agentId !== undefined) {
       return yield* next(e)
     }
 
     const chosen = ((await $.store.get('selection')) ?? {}) as Partial<Selection>
-    const model = chosen.model ?? e.model
     const effort = chosen.effort ?? e.effort
 
-    await update($, seen, () => ({ model, effort: String(effort ?? '') }))
+    await update($, seen, () => ({ model: e.model, effort: String(effort ?? '') }))
 
     return yield* next({
       ...e,
-      model,
       effort: effort as typeof e.effort,
     })
   })
@@ -299,11 +320,14 @@ export const register: Register = on => {
     }
   }).catch(() => ({ deny: 'dawa-tools: harness_model failed.' }))
 
+  // Stacks under the row of any other mod that draws the band (token-weather),
+  // so both show whichever is installed first.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) {
       return next(e)
     }
 
+    const below = await next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
     const picked = await read($, selection)
     const used = await read($, seen)
@@ -311,16 +335,19 @@ export const register: Register = on => {
     const effort = picked.effort ?? used.effort
 
     return (
-      <Box justifyContent="space-between">
-        <Text dimColor>
-          {labelOf(model)} · effort {effort === '' ? 'default' : effort}
-        </Text>
-        <Button
-          key="open"
-          label="◆ Dawa Tools"
-          variant="primary"
-          onPress={() => void openPane($)}
-        />
+      <Box flexDirection="column">
+        <Box justifyContent="space-between">
+          <Text dimColor>
+            {labelOf(model)} · effort {effort === '' ? 'default' : effort}
+          </Text>
+          <Button
+            key="open"
+            label="◆ Dawa Tools"
+            variant="primary"
+            onPress={() => void openPane($)}
+          />
+        </Box>
+        {below}
       </Box>
     )
   })

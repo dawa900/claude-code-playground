@@ -34,8 +34,8 @@ Pressing the button, or running `/dawa-tools`, opens a pane:
 
 | Hook | What it does |
 |------|--------------|
-| `session.start` | Restores the saved choice, registers `/dawa-tools` and the `harness_model` tool, and loads mods and harnesses. |
-| `turn.step` | Rewrites `model` and `effort` on main-loop requests when a choice is saved. |
+| `session.start` | Restores the saved choice, runs `/model` with the saved model, registers `/dawa-tools` and the `harness_model` tool, and loads mods and harnesses. |
+| `turn.step` | Rewrites `effort` on main-loop requests when a choice is saved. |
 | `tool.call` for `harness_model` | Serves the tool: `list` and `set`. |
 | `command.run` for `dawa-tools` | Opens the pane. |
 | `ui.render` with `{component: "AbovePrompt"}` | Draws the row above the prompt. |
@@ -53,7 +53,7 @@ Add an entry to `harnesses.json` (or ask Claude to). Each entry says how to list
 }
 ```
 
-`format` is `lines` (one model per line of output) or `json`, where `path` walks the parsed output, with `name[]` fanning out over an array, for example `providers[].models`. Press **refresh** in the pane after editing.
+`format` is `lines` (one model per line of output) or `json`, where `path` walks the parsed output, with `name[]` fanning out over an array, for example `providers[].models`. `include` is optional: only models whose name contains that text (ignoring case) are listed and accepted. The opencode entry uses `"include": "deepseek"`. Press **refresh** in the pane after editing.
 
 ## Demo
 
@@ -118,7 +118,7 @@ No environment variables.
 ## Notes / limitations
 
 - **The panel is a pane, not a floating box.** It docks beside the transcript in the fullscreen terminal from 110 columns, and opens above the prompt otherwise.
-- **The model and effort override sticks** until you choose "use session default". It does not change what `/model` shows; it changes what each request is sent with. A model that takes no effort setting is sent none.
+- **The model is set with `/model`.** Picking a model in the panel runs the built-in `/model <id>` as if you typed it, so the session's model and what `/model` shows both change. The choice is saved and re-applied at the next session start. "use session default" runs `/model default`; this assumes `default` is accepted there. Effort is still an override on each request, and a model that takes no effort setting is sent none.
 - **Model names are hard-coded** in `hooks/register.tsx` (`MODELS`, `EFFORTS`). Edit them when new models ship.
 - **Mod toggles need a reload.** `claude plugin enable` and `disable` write settings; the mod then queues `/reload-plugins`. It lists plugins that `claude plugin list` reports, so a mod loaded only with `--plugin-dir` is not listed.
 - **Harness models are read when you open the panel**, press refresh, or when Claude calls the tool. Listing runs the harness's own command, so it can take a few seconds.

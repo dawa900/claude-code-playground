@@ -16,7 +16,7 @@ test('harness_model refuses a harness that is not configured', async $ => {
   expect(String(result)).toContain('Unknown harness')
 })
 
-test('turn.step sends the picked model and effort', async ($, on) => {
+test('turn.step sends the picked effort and leaves the model to /model', async ($, on) => {
   mock.store(on, {
     selection: { model: 'claude-opus-5-5', effort: 'max' },
   })
@@ -38,6 +38,6 @@ test('turn.step sends the picked model and effort', async ($, on) => {
     void _
   }
 
-  expect(sent?.model).toBe('claude-opus-5-5')
+  expect(sent?.model).toBe('claude-sonnet-5-5')
   expect(sent?.effort).toBe('max')
 })

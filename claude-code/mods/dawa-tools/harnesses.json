@@ -5,7 +5,8 @@
       "name": "opencode",
       "models": {
         "command": ["opencode", "models"],
-        "format": "lines"
+        "format": "lines",
+        "include": "deepseek"
       }
     },
     {
