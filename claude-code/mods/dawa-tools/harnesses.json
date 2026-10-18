@@ -1,0 +1,21 @@
+{
+  "harnesses": [
+    {
+      "id": "opencode",
+      "name": "opencode",
+      "models": {
+        "command": ["opencode", "models"],
+        "format": "lines"
+      }
+    },
+    {
+      "id": "reasonix",
+      "name": "reasonix",
+      "models": {
+        "command": ["reasonix", "doctor", "--json"],
+        "format": "json",
+        "path": "providers[].models"
+      }
+    }
+  ]
+}
